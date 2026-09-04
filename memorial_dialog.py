@@ -597,7 +597,7 @@ class MemorialDialog(QDialog):
             try:
                 if layer.type() == layer.VectorLayer and layer.geometryType() == QgsWkbTypes.PointGeometry:
                     self.combo_camadas.addItem(layer.name(), layer.id())
-            except Exception:
+            except Exception:  # nosec B112 - so pula camadas que nao respondem geometryType()
                 continue
 
     def _selecionar_pdf(self):

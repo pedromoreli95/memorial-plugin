@@ -3,7 +3,7 @@ name=Memorial Descritivo Importer
 qgisMinimumVersion=3.28
 qgisMaximumVersion=4.99
 description=Detects and imports vertex coordinates from Brazilian land survey PDF documents (memorial descritivo) into a point layer, with automatic format detection.
-version=2.0
+version=2.1
 
 about=Reads a memorial descritivo PDF and detects the coordinate format automatically (tries common label pairs, real PDF tables, and a generic pattern that uses the typical magnitude of Brazilian UTM coordinates to tell Northing from Easting), inserting the vertices into an existing point layer. Privacy: the PDF and its coordinates are never uploaded anywhere — everything is read and processed locally. Free for the first 3 uses; continued use requires an active subscription (Kiwify) — only the confirmation e-mail is sent for that check, nothing about the document itself. Includes a manual mode for atypical formats.
 

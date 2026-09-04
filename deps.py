@@ -3,7 +3,7 @@
 
 import importlib
 import os
-import subprocess
+import subprocess  # nosec B404 - usado só para "pip install" com argumentos fixos, nunca com entrada do usuário
 import sys
 
 from qgis.PyQt.QtCore import QThread, pyqtSignal
@@ -73,7 +73,11 @@ def install_dependency(pip_name, log_callback=None):
         if sys.platform.startswith("win"):
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-        processo = subprocess.Popen(
+        # "cmd" e' sempre [python_exe, "-m", "pip", "install", "--user", pip_name],
+        # onde python_exe vem de _find_python_executable() (caminhos conhecidos do
+        # proprio QGIS) e pip_name vem de REQUIRED_PACKAGES (lista fixa no codigo,
+        # nunca digitada pelo usuario) -- nao ha entrada externa/nao confiavel aqui.
+        processo = subprocess.Popen(  # nosec B603
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
