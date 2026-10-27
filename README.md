@@ -4,6 +4,14 @@ Reads a Brazilian land survey "memorial descritivo" PDF and imports its
 vertex coordinates into a QGIS point layer — automatically detecting the
 coordinate format (label, order, or table layout) to reduce manual configuration.
 
+## Instalação no QGIS
+
+Gere o pacote de instalação com `python tools/empacotar.py`. O arquivo
+`dist/memorial_plugin.zip` contém a pasta `memorial_plugin` e pode ser instalado
+no QGIS em **Complementos → Gerenciar e instalar complementos → Instalar a partir de ZIP**.
+O ZIP de código gerado pelo botão **Download ZIP** do GitHub usa outro nome de
+pasta e não é o pacote de instalação do plugin.
+
 ## How detection works
 
 1. Looks for real tables inside the PDF and reads column headers.
