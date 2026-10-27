@@ -24,7 +24,7 @@ import unicodedata
 
 
 def _build_number_pattern():
-    return r'(\d+(?:[.,]\d+)?)'
+    return r'((?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?))'
 
 
 def build_regex(north_label, east_label, letter_order, unit_hint=True):
@@ -180,16 +180,16 @@ def _classify_by_magnitude(val_a, val_b):
     a_is_northing = val_a >= NORTHING_SOUTH_MIN
     b_is_northing = val_b >= NORTHING_SOUTH_MIN
 
-    if a_is_northing and not b_is_northing:
+    if a_is_northing and 100_000 <= val_b <= 900_000 and val_a <= 10_000_000:
         return val_a, val_b
-    if b_is_northing and not a_is_northing:
+    if b_is_northing and 100_000 <= val_a <= 900_000 and val_b <= 10_000_000:
         return val_b, val_a
     return None
 
 
 def _generic_pair_pattern():
     """Dois numeros com cara de coordenada UTM, com ate ~25 caracteres entre eles."""
-    num = r'(\d{5,8}(?:[.,]\d+)?)'
+    num = r'((?:\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{5,8}(?:[.,]\d+)?))'
     meio = r'[^\d]{1,25}?'
     return rf'{num}{meio}{num}'
 
@@ -200,7 +200,8 @@ def _find_column_index(header_row, candidates):
             continue
         texto = _normalizar(cell)
         for cand in candidates:
-            if _normalizar(cand) in texto:
+            candidato = _normalizar(cand)
+            if re.search(r"(?<![A-Z0-9])" + re.escape(candidato) + r"(?![A-Z0-9])", texto):
                 return i
     return None
 

@@ -16,27 +16,18 @@ manual configuration.
 
 A manual mode is available for atypical formats.
 
-## Privacy
+## Privacy and pricing
 
-The PDF and the extracted coordinates never leave your computer —
-everything is read and processed locally. The only thing sent over the
-network is your e-mail address, and only once your 3 free uses are
-exhausted, to confirm an active subscription against a public,
-read-only file.
-
-## Pricing
-
-The first 3 extractions are free. Continued use requires an active
-subscription. The plugin checks subscription status against a public,
-read-only file — no account or login is needed to use the free tier.
+The PDF and extracted coordinates are processed locally. The plugin is free,
+with unlimited use and no subscription or account. Installing the optional
+Python dependency requires an internet connection.
 
 ## Como funciona (PT-BR)
 
 Lê um memorial descritivo em PDF e detecta sozinho o formato das
 coordenadas (tabela, rótulo, ou padrão numérico pela grandeza típica de
 UTM no Brasil), importando os vértices para uma camada de pontos do
-QGIS. As primeiras 3 extrações são gratuitas; o uso contínuo exige
-assinatura ativa.
+QGIS. O uso é gratuito e ilimitado, sem assinatura ou cadastro.
 
 ## License
 

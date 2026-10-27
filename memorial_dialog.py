@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 
-from qgis.PyQt.QtCore import QUrl, Qt
+from qgis.PyQt.QtCore import Qt
 
 from qgis.PyQt.QtWidgets import (
     QDialog,
@@ -29,7 +29,7 @@ from qgis.PyQt.QtWidgets import (
     QHeaderView,
     QProgressBar,
 )
-from qgis.PyQt.QtGui import QIcon, QFont, QDesktopServices
+from qgis.PyQt.QtGui import QIcon, QFont
 
 from qgis.core import (
     QgsProject,
@@ -41,7 +41,6 @@ from qgis.core import (
 
 from .extractor import extrair_vertices, auto_extract_vertices, build_regex
 from . import deps
-from . import licensing
 
 
 PLUGIN_DIR = os.path.dirname(__file__)
@@ -284,31 +283,6 @@ class MemorialDialog(QDialog):
         subtitulo.setWordWrap(True)
         subtitulo.setStyleSheet("color: #6b7570; font-size: 11px;")
         layout_principal.addWidget(subtitulo)
-
-        # --- Faixa de status: usos gratis / assinatura, sempre visivel ---
-        self.faixa_status = QFrame()
-        self.faixa_status.setObjectName("faixaStatus")
-        layout_faixa = QHBoxLayout(self.faixa_status)
-        layout_faixa.setContentsMargins(12, 8, 10, 8)
-        layout_faixa.setSpacing(10)
-
-        self.label_status_assinatura = QLabel("")
-        self.label_status_assinatura.setWordWrap(True)
-        layout_faixa.addWidget(self.label_status_assinatura, 1)
-
-        self.btn_assinar = QPushButton("Assinar agora")
-        self.btn_assinar.setObjectName("botaoAssinar")
-        self.btn_assinar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_assinar.setToolTip(
-            "Importante: use o mesmo e-mail no pagamento e quando o plugin pedir depois."
-        )
-        self.btn_assinar.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(licensing.SUBSCRIBE_URL))
-        )
-        layout_faixa.addWidget(self.btn_assinar, 0)
-
-        layout_principal.addWidget(self.faixa_status)
-        self._atualizar_status_assinatura()
 
         self.tabs = QTabWidget()
         layout_principal.addWidget(self.tabs)
@@ -618,81 +592,6 @@ class MemorialDialog(QDialog):
         except Exception as e:
             self.label_preview_regex.setText(f"Padrao (regex) gerado: erro ({e})")
 
-    def _atualizar_status_assinatura(self):
-        restantes = licensing.usos_restantes()
-        if restantes > 0:
-            estado = "livre"
-            texto = f"🎁 Você tem {restantes} uso(s) grátis restante(s)."
-            mostrar_botao = True
-        else:
-            email = licensing.email_salvo()
-            if email and licensing.verificar_assinatura(email, timeout_ms=6000):
-                estado = "ativo"
-                texto = f"✓ Assinatura ativa ({email})"
-                mostrar_botao = False
-            else:
-                estado = "bloqueado"
-                texto = "🔒 Seus usos grátis acabaram. Assine para continuar usando."
-                mostrar_botao = True
-
-        self.label_status_assinatura.setText(texto)
-        self.btn_assinar.setVisible(mostrar_botao)
-
-        self.faixa_status.setObjectName(f"faixaStatus_{estado}")
-        self.faixa_status.style().unpolish(self.faixa_status)
-        self.faixa_status.style().polish(self.faixa_status)
-
-    def _pode_extrair_agora(self):
-        """
-        Checa o limite de usos gratuitos / assinatura ativa. Retorna
-        True se pode seguir com a extração, ou False (já mostrando o
-        aviso certo) se não pode.
-        """
-        if licensing.usos_restantes() > 0:
-            licensing.registrar_uso()
-            self._atualizar_status_assinatura()
-            return True
-
-        email = licensing.email_salvo()
-        if not email:
-            from qgis.PyQt.QtWidgets import QInputDialog
-            email, ok = QInputDialog.getText(
-                self,
-                "E-mail da assinatura",
-                "Seus 3 usos grátis acabaram.\n\n"
-                "Digite EXATAMENTE o mesmo e-mail que você usou para pagar na "
-                "Kiwify (ou cancele para ver como assinar). Se o e-mail for "
-                "diferente do pagamento, não vai encontrar sua assinatura. "
-                "Só esse e-mail é enviado para conferência — o PDF e as "
-                "coordenadas continuam só no seu computador:",
-            )
-            if not ok or not email.strip():
-                self._oferecer_assinatura()
-                return False
-            licensing.salvar_email(email)
-
-        self.label_status_assinatura.setText("Verificando assinatura...")
-        if licensing.verificar_assinatura(email):
-            self._atualizar_status_assinatura()
-            return True
-
-        self._atualizar_status_assinatura()
-        self._oferecer_assinatura()
-        return False
-
-    def _oferecer_assinatura(self):
-        resposta = QMessageBox.question(
-            self,
-            "Assinatura necessária",
-            "Não encontrei uma assinatura ativa com esse e-mail.\n\n"
-            "Seus 3 usos grátis já foram usados. Para continuar importando "
-            "memoriais, é necessário assinar.\n\n"
-            "Quer abrir a página de assinatura agora?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if resposta == QMessageBox.StandardButton.Yes:
-            QDesktopServices.openUrl(QUrl(licensing.SUBSCRIBE_URL))
-
     def _atualizar_modo_deteccao(self):
         manual = self.radio_manual.isChecked()
         self.grp_padrao.setVisible(manual)
@@ -708,9 +607,11 @@ class MemorialDialog(QDialog):
             self.tabela_previa.setItem(linha, 2, QTableWidgetItem(str(northing)))
 
     def _extrair_vertices(self):
-        if not self._pode_extrair_agora():
-            return
-
+        # Não permita inserir resultados de uma extração anterior após uma falha.
+        self._pontos_extraidos = []
+        self._dados_extraidos = []
+        self._preencher_tabela_previa([])
+        self.label_resultado_deteccao.clear()
         pdf_path = self.edit_pdf_path.text().strip()
         if not pdf_path or not os.path.isfile(pdf_path):
             QMessageBox.warning(self, "Aviso", "Selecione um arquivo PDF valido.")
@@ -820,20 +721,24 @@ class MemorialDialog(QDialog):
             QMessageBox.warning(self, "Aviso", "Camada nao encontrada. Atualize a lista.")
             return
 
-        if not camada.isEditable():
-            camada.startEditing()
+        if not camada.isEditable() and not camada.startEditing():
+            QMessageBox.critical(self, "Erro", "Não foi possível iniciar a edição da camada.")
+            return
 
         novas_feicoes = []
         for nome_vertice, easting, northing in self._dados_extraidos:
             feicao = QgsFeature(camada.fields())
             feicao.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(easting, northing)))
-            if camada.fields().count() > 0:
-                # tenta escrever no primeiro campo de texto disponivel
-                nome_campo = camada.fields()[0].name()
-                feicao.setAttribute(nome_campo, nome_vertice)
+            from qgis.PyQt.QtCore import QVariant
+            for campo in camada.fields():
+                if campo.type() == QVariant.String:
+                    feicao.setAttribute(campo.name(), nome_vertice)
+                    break
             novas_feicoes.append(feicao)
 
-        sucesso, _ = camada.dataProvider().addFeatures(novas_feicoes)
+        if not camada.addFeatures(novas_feicoes):
+            QMessageBox.critical(self, "Erro", "Não foi possível inserir os vértices na camada.")
+            return
         camada.updateExtents()
         self.iface.mapCanvas().refresh()
 
@@ -870,13 +775,14 @@ class MemorialDialog(QDialog):
             tipo_double = QVariant.Double
 
         campos_existentes = [f.name() for f in camada.fields()]
-        if not camada.isEditable():
-            camada.startEditing()
+        if not camada.isEditable() and not camada.startEditing():
+            QMessageBox.critical(self, "Erro", "Não foi possível iniciar a edição da camada.")
+            return
 
-        if "coord_x" not in campos_existentes:
-            camada.dataProvider().addAttributes([QgsField("coord_x", tipo_double)])
-        if "coord_y" not in campos_existentes:
-            camada.dataProvider().addAttributes([QgsField("coord_y", tipo_double)])
+        for nome in ("coord_x", "coord_y"):
+            if nome not in campos_existentes and not camada.addAttribute(QgsField(nome, tipo_double)):
+                QMessageBox.critical(self, "Erro", f"Não foi possível criar o campo {nome}.")
+                return
         camada.updateFields()
 
         idx_x = camada.fields().indexOf("coord_x")
@@ -893,8 +799,9 @@ class MemorialDialog(QDialog):
             contexto.setFeature(feicao)
             valor_x = expr_x.evaluate(contexto)
             valor_y = expr_y.evaluate(contexto)
-            camada.changeAttributeValue(feicao.id(), idx_x, valor_x)
-            camada.changeAttributeValue(feicao.id(), idx_y, valor_y)
+            if not camada.changeAttributeValue(feicao.id(), idx_x, valor_x) or not camada.changeAttributeValue(feicao.id(), idx_y, valor_y):
+                QMessageBox.critical(self, "Erro", "Não foi possível preencher as coordenadas. Confira as edições da camada.")
+                return
             atualizados += 1
 
         camada.updateExtents()
