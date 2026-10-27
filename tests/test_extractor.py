@@ -29,3 +29,25 @@ class ExtractionTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class PreservationTests(unittest.TestCase):
+    def test_consecutive_duplicates_preserved_in_both_modes(self):
+        text = 'N 7491240.70 E 206585.00 N 7491240.70 E 206585.00 N 7491567.58 E 206099.95'
+        with patch.object(extractor, 'extract_text_from_pdf', return_value=text), patch.object(extractor, '_extract_from_tables', return_value=[]):
+            manual, _, _ = extractor.extrair_vertices('unused')
+            auto = extractor.auto_extract_vertices('unused')['pontos']
+        self.assertEqual(len(manual), 3)
+        self.assertEqual(auto, manual)
+        self.assertEqual(auto[0], auto[1])
+
+    def test_labels_are_not_swapped_by_magnitude(self):
+        text = 'N 200000 E 7000000 N 200001 E 7000001 N 200002 E 7000002'
+        with patch.object(extractor, 'extract_text_from_pdf', return_value=text), patch.object(extractor, '_extract_from_tables', return_value=[]):
+            result = extractor.auto_extract_vertices('unused')
+        self.assertEqual(result['pontos'][0], (7000000, 200000))
+
+    def test_table_columns_are_not_swapped_by_magnitude(self):
+        rows = [(200000, 7000000, 'Pt1'), (200001, 7000001, 'Pt2'), (200002, 7000002, 'Pt3')]
+        with patch.object(extractor, '_extract_from_tables', return_value=rows):
+            result = extractor.auto_extract_vertices('unused')
+        self.assertEqual(result['pontos'][0], (7000000, 200000))
