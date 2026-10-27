@@ -525,7 +525,7 @@ class MemorialDialog(QDialog):
         self.combo_camadas.clear()
         for layer in QgsProject.instance().mapLayers().values():
             try:
-                if layer.type() == layer.VectorLayer and layer.geometryType() == QgsWkbTypes.PointGeometry:
+                if layer.type() == layer.VectorLayer and layer.geometryType() == QgsWkbTypes.GeometryType.PointGeometry:
                     self.combo_camadas.addItem(layer.name(), layer.id())
             except Exception:  # nosec B112 - so pula camadas que nao respondem geometryType()
                 continue
