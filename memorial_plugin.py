@@ -11,7 +11,7 @@ class MemorialPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.actions = []
-        self.menu = "&Memorial Descritivo"
+        self.menu = "&memorial_plugin"
         self.dialog = None
         self.plugin_dir = os.path.dirname(__file__)
 
