@@ -51,3 +51,33 @@ class PreservationTests(unittest.TestCase):
         with patch.object(extractor, '_extract_from_tables', return_value=rows):
             result = extractor.auto_extract_vertices('unused')
         self.assertEqual(result['pontos'][0], (7000000, 200000))
+
+class ClosingVertexTests(unittest.TestCase):
+    def _extract(self, text):
+        with patch.object(extractor, 'extract_text_from_pdf', return_value=text), patch.object(extractor, '_extract_from_tables', return_value=[]):
+            return extractor.extrair_vertices('unused')[0], extractor.auto_extract_vertices('unused')['pontos']
+
+    def test_explicit_same_vertex_at_end_is_omitted(self):
+        text = ('vértice Pt0, de coordenadas N 7490000.00 E 200000.00; '
+                'vértice Pt1, de coordenadas N 7491000 E 200001; '
+                'vértice Pt0, de coordenadas N 7490000 E 200000')
+        for points in self._extract(text):
+            self.assertEqual(points, [(200000, 7490000), (200001, 7491000)])
+
+    def test_distinct_vertex_with_same_coordinates_is_preserved(self):
+        text = ('vértice Pt0, de coordenadas N 7490000 E 200000; '
+                'vértice Pt1, de coordenadas N 7491000 E 200001; '
+                'vértice Pt2, de coordenadas N 7490000 E 200000')
+        for points in self._extract(text):
+            self.assertEqual(len(points), 3)
+            self.assertEqual(points[0], points[-1])
+
+    def test_different_coordinates_before_rounding_are_preserved(self):
+        rows = [(7490000.001, 200000, 'Pt0'), (7491000, 200001, 'Pt1'), (7492000, 200002, 'Pt2'), (7490000.002, 200000, 'Pt0')]
+        with patch.object(extractor, '_extract_from_tables', return_value=rows):
+            self.assertEqual(len(extractor.auto_extract_vertices('unused')['pontos']), 4)
+
+    def test_table_explicit_closing_vertex(self):
+        rows = [(7490000, 200000, 'Pt0'), (7491000, 200001, 'Pt1'), (7492000, 200002, 'Pt2'), (7490000, 200000, 'Pt0')]
+        with patch.object(extractor, '_extract_from_tables', return_value=rows):
+            self.assertEqual(len(extractor.auto_extract_vertices('unused')['pontos']), 3)
