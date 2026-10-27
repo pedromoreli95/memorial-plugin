@@ -86,6 +86,31 @@ def extract_text_from_pdf(pdf_path):
     return " ".join(texto_bruto.split())
 
 
+def _matches_com_nomes(texto, padrao):
+    """Associa um identificador explícito de vértice ao par que o segue."""
+    anterior = 0
+    for match in re.finditer(padrao, texto, flags=re.IGNORECASE):
+        trecho = texto[anterior:match.start()]
+        nomes = list(re.finditer(
+            r"\bv[eé]rtice\s+([\w-]+)\s*,?\s*(?:de\s+)?coordenadas?\s*$",
+            trecho, flags=re.IGNORECASE,
+        ))
+        nome = nomes[-1].group(1) if nomes else None
+        yield match.group(1), match.group(2), nome
+        anterior = match.end()
+
+
+def _remover_fechamento_explicito(pares):
+    """Omite apenas a referência final ao mesmo vértice e coordenadas iniciais."""
+    if len(pares) > 1:
+        primeiro, ultimo = pares[0], pares[-1]
+        if (primeiro[2] and ultimo[2]
+                and primeiro[2].casefold() == ultimo[2].casefold()
+                and primeiro[:2] == ultimo[:2]):
+            return pares[:-1], True
+    return pares, False
+
+
 def extrair_vertices(
     pdf_path,
     north_label='N',
@@ -100,13 +125,15 @@ def extrair_vertices(
     texto_continuo = extract_text_from_pdf(pdf_path)
 
     padrao, grupos = build_regex(north_label, east_label, letter_order)
-    matches = re.findall(padrao, texto_continuo, flags=re.IGNORECASE)
+    matches = list(_matches_com_nomes(texto_continuo, padrao))
+    matches = [(_parse_number(a), _parse_number(b), nome) for a, b, nome in matches]
+    matches, _ = _remover_fechamento_explicito(matches)
 
     pontos, dados = [], []
     contador = vertex_start
 
     for grupo in matches:
-        val1, val2 = grupo
+        val1, val2, _ = grupo
         if grupos == ('north', 'east'):
             northing = _parse_number(val1)
             easting = _parse_number(val2)
@@ -258,13 +285,14 @@ def auto_extract_vertices(
     """
 
     def _montar_saida(pares, metodo_usado, confianca, usar_nomes_da_tabela=False):
+        pares, fechou = _remover_fechamento_explicito(pares)
+        if fechou:
+            metodo_usado += " Referência final ao vértice inicial omitida."
         pontos, dados = [], []
         contador = vertex_start
         for item in pares:
-            if usar_nomes_da_tabela:
-                northing, easting, nome = item
-            else:
-                northing, easting = item
+            northing, easting, nome = item
+            if not usar_nomes_da_tabela:
                 nome = None
             if decimal_places is not None:
                 northing = round(northing, decimal_places)
@@ -304,12 +332,12 @@ def auto_extract_vertices(
         ):
             try:
                 padrao, grupos = build_regex(n_label, e_label, ordem)
-                matches = re.findall(padrao, texto, flags=re.IGNORECASE)
+                matches = list(_matches_com_nomes(texto, padrao))
             except re.error:
                 continue
             if not matches:
                 continue
-            pares = [(_parse_number(v1), _parse_number(v2), grupos) for v1, v2 in matches]
+            pares = [(_parse_number(v1), _parse_number(v2), grupos, nome) for v1, v2, nome in matches]
             tentativas.append((f"rótulos '{n_label}'/'{e_label}' ({desc_ordem})", pares))
 
     # --- Estrategia 3: padrao generico, sem rotulo, filtrado pela grandeza ---
@@ -317,10 +345,10 @@ def auto_extract_vertices(
     # isso descarta automaticamente azimutes, distancias, areas, numeros
     # de pagina etc. que aparecem no mesmo documento)
     pares_genericos = []
-    for a, b in re.findall(_generic_pair_pattern(), texto):
+    for a, b, nome in _matches_com_nomes(texto, _generic_pair_pattern()):
         va, vb = _parse_number(a), _parse_number(b)
         if _classify_by_magnitude(va, vb) is not None:
-            pares_genericos.append((va, vb, None))
+            pares_genericos.append((va, vb, None, nome))
     if pares_genericos:
         tentativas.append(("padrão numérico genérico, filtrado pela grandeza (sem rótulo)", pares_genericos))
 
@@ -336,16 +364,16 @@ def auto_extract_vertices(
     for descricao, pares in tentativas:
         classificados = 0
         pares_resolvidos = []
-        for v1, v2, grupos in pares:
+        for v1, v2, grupos, nome in pares:
             resultado = _classify_by_magnitude(v1, v2)
             if grupos is not None:
                 par = (v1, v2) if grupos == ('north', 'east') else (v2, v1)
-                pares_resolvidos.append(par)
+                pares_resolvidos.append((*par, nome))
                 if resultado == par:
                     classificados += 1
             elif resultado is not None:
                 classificados += 1
-                pares_resolvidos.append(resultado)
+                pares_resolvidos.append((*resultado, nome))
 
         pontuacao = (pares[0][2] is not None, len(pares_resolvidos), classificados)
         if melhor is None or pontuacao > melhor[0]:

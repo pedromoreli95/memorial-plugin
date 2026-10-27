@@ -33,6 +33,7 @@ QGIS. O uso é gratuito e ilimitado, sem assinatura ou cadastro.
 GPL v3 or later — see [LICENSE](LICENSE).
 
 As ocorrências consecutivas com coordenadas iguais são preservadas, assim como
-a repetição do ponto inicial no fechamento. Confira a prévia: em modo automático,
+referências finais explícitas ao mesmo ponto inicial são omitidas quando nome e
+coordenadas coincidem. Confira a prévia: em modo automático,
 formatos sem rótulos dependem de uma inferência pela grandeza das coordenadas.
 Os nomes fora de tabelas são gerados conforme o prefixo e a numeração configurados.
