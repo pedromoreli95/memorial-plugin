@@ -13,10 +13,9 @@ Tres estrategias sao tentadas, da mais confiavel pra menos confiavel:
      so a grandeza tipica de coordenadas UTM no Brasil pra filtrar
      ruido (azimutes, distancias, numeros de pagina etc.)
 
-Em todos os casos, a grandeza da coordenada (Norte sempre um numero bem
-maior que Leste, no sistema UTM brasileiro) e usada como conferencia
-final -- por isso a deteccao funciona mesmo que o rotulo ou a ordem no
-PDF sejam atipicos.
+Os rotulos e cabecalhos indicam a ordem das coordenadas. A grandeza
+serve para avaliar a confianca e, na ausencia de rotulos, inferir a ordem;
+por isso a deteccao generica exige conferencia pelo usuario.
 """
 
 import re
@@ -95,7 +94,7 @@ def extrair_vertices(
     vertex_prefix='P',
     vertex_start=0,
     decimal_places=2,
-    remove_consecutive_duplicates=True,
+    remove_consecutive_duplicates=False,
 ):
     """Extracao manual (modo avancado): usa exatamente o rotulo/ordem informado."""
     texto_continuo = extract_text_from_pdf(pdf_path)
@@ -250,7 +249,7 @@ def auto_extract_vertices(
     vertex_prefix='P',
     vertex_start=0,
     decimal_places=2,
-    remove_consecutive_duplicates=True,
+    remove_consecutive_duplicates=False,
 ):
     """
     Tenta descobrir sozinho o formato de coordenadas do memorial.
@@ -285,13 +284,7 @@ def auto_extract_vertices(
         tabela_resultados = []
 
     if len(tabela_resultados) >= 3:
-        pares_confirmados = []
-        for val_n, val_e, nome in tabela_resultados:
-            northing, easting = val_n, val_e
-            checagem = _classify_by_magnitude(val_n, val_e)
-            if checagem is not None:
-                northing, easting = checagem  # a grandeza tem prioridade sobre a coluna
-            pares_confirmados.append((northing, easting, nome))
+        pares_confirmados = tabela_resultados
         return _montar_saida(
             pares_confirmados,
             f"Detectado em formato de tabela no PDF ({len(pares_confirmados)} linhas), "
@@ -345,17 +338,20 @@ def auto_extract_vertices(
         pares_resolvidos = []
         for v1, v2, grupos in pares:
             resultado = _classify_by_magnitude(v1, v2)
-            if resultado is not None:
+            if grupos is not None:
+                par = (v1, v2) if grupos == ('north', 'east') else (v2, v1)
+                pares_resolvidos.append(par)
+                if resultado == par:
+                    classificados += 1
+            elif resultado is not None:
                 classificados += 1
                 pares_resolvidos.append(resultado)
-            elif grupos is not None:
-                pares_resolvidos.append((v1, v2) if grupos == ('north', 'east') else (v2, v1))
 
-        pontuacao = (classificados, len(pares_resolvidos))
+        pontuacao = (pares[0][2] is not None, len(pares_resolvidos), classificados)
         if melhor is None or pontuacao > melhor[0]:
             melhor = (pontuacao, descricao, pares_resolvidos)
 
-    (classificados_por_magnitude, total), descricao, pares_northing_easting = melhor
+    (_, total, classificados_por_magnitude), descricao, pares_northing_easting = melhor
 
     if total < 3:
         confianca = 'baixa'
