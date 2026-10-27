@@ -266,7 +266,7 @@ class MemorialDialog(QDialog):
     def __init__(self, iface, parent=None):
         super().__init__(parent)
         self.iface = iface
-        self.setWindowTitle("Importador de Memorial Descritivo")
+        self.setWindowTitle("memorial_plugin")
         self.resize(760, 680)
         self.setStyleSheet(QSS)
 
@@ -281,7 +281,7 @@ class MemorialDialog(QDialog):
         layout_principal.setContentsMargins(12, 12, 12, 12)
         layout_principal.setSpacing(8)
 
-        titulo = QLabel("Importador de Memorial Descritivo")
+        titulo = QLabel("memorial_plugin")
         fonte_titulo = QFont()
         fonte_titulo.setPointSize(12)
         fonte_titulo.setBold(True)

@@ -1,4 +1,4 @@
-# Memorial Descritivo Importer
+# memorial_plugin
 
 Reads a Brazilian land survey "memorial descritivo" PDF and imports its
 vertex coordinates into a QGIS point layer — automatically detecting the
