@@ -28,6 +28,8 @@ from qgis.PyQt.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QProgressBar,
+    QToolButton,
+    QScrollArea,
 )
 from qgis.PyQt.QtGui import QIcon, QFont
 
@@ -180,6 +182,17 @@ QLabel#confiancaBaixa {
     padding: 4px 2px;
 }
 
+QLabel#tituloEtapa {
+    color: #1f6b47;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+QPushButton:disabled {
+    background-color: #cbd5cf;
+    color: #68776e;
+}
+
 QLabel#textoAjuda {
     color: #6b7570;
     font-size: 11px;
@@ -254,7 +267,7 @@ class MemorialDialog(QDialog):
         super().__init__(parent)
         self.iface = iface
         self.setWindowTitle("Importador de Memorial Descritivo")
-        self.resize(640, 600)
+        self.resize(760, 680)
         self.setStyleSheet(QSS)
 
         icon_path = os.path.join(PLUGIN_DIR, "icon.png")
@@ -290,6 +303,13 @@ class MemorialDialog(QDialog):
         self._montar_aba_configurar()
         self._montar_aba_resultado()
         self._montar_aba_dependencias()
+        for widget in (self.edit_pdf_path, self.edit_rotulo_norte, self.edit_rotulo_leste,
+                       self.edit_prefixo_vertice):
+            widget.textChanged.connect(self._invalidar_previa)
+        for widget in (self.combo_ordem, self.spin_inicio_vertice, self.spin_casas_decimais):
+            widget.currentIndexChanged.connect(self._invalidar_previa) if isinstance(widget, QComboBox) else widget.valueChanged.connect(self._invalidar_previa)
+        self.radio_automatico.toggled.connect(self._invalidar_previa)
+        self.check_manter_casas_originais.toggled.connect(self._invalidar_previa)
 
         self._avisar_dependencia_ausente()
 
@@ -329,175 +349,105 @@ class MemorialDialog(QDialog):
     def _montar_aba_configurar(self):
         aba = QWidget()
         layout = QVBoxLayout(aba)
-        layout.setSpacing(7)
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(12)
 
-        # --- Camada de destino ---
-        grp_camada = QGroupBox("Camada de pontos de destino")
-        layout_camada = QVBoxLayout()
-        layout_camada.setSpacing(4)
+        titulo = QLabel("1  ·  Escolha o memorial")
+        titulo.setObjectName("tituloEtapa")
+        layout.addWidget(titulo)
+        ajuda = QLabel("Selecione o PDF e veja as coordenadas antes de inserir na camada.")
+        ajuda.setWordWrap(True)
+        ajuda.setObjectName("textoAjuda")
+        layout.addWidget(ajuda)
 
-        form_camada = QFormLayout()
-        form_camada.setSpacing(6)
-        self.combo_camadas = QComboBox()
-        self._popular_camadas_pontos()
-        btn_atualizar_camadas = QPushButton("Atualizar lista")
-        btn_atualizar_camadas.setObjectName("botaoSecundario")
-        btn_atualizar_camadas.setIcon(self._icone(QStyle.StandardPixmap.SP_BrowserReload))
-        btn_atualizar_camadas.clicked.connect(self._popular_camadas_pontos)
-        linha_camada = QHBoxLayout()
-        linha_camada.addWidget(self.combo_camadas)
-        linha_camada.addWidget(btn_atualizar_camadas)
-        form_camada.addRow("Camada (qualquer nome):", linha_camada)
-        layout_camada.addLayout(form_camada)
-
-        ajuda_camada = QLabel(
-            "A camada precisa já existir e ter pelo menos uma coluna (campo de texto) "
-            "criada — pode estar vazia, sem nenhum ponto ainda. O nome de cada vértice "
-            "(P0, P1...) é gravado automaticamente na primeira coluna que a camada tiver."
-        )
-        ajuda_camada.setObjectName("textoAjuda")
-        ajuda_camada.setWordWrap(True)
-        layout_camada.addWidget(ajuda_camada)
-
-        grp_camada.setLayout(layout_camada)
-        layout.addWidget(grp_camada)
-
-        # --- Caminho do PDF ---
-        grp_pdf = QGroupBox("Arquivo do memorial descritivo (PDF)")
-        form_pdf = QFormLayout()
-        form_pdf.setSpacing(6)
-        self.edit_pdf_path = QLineEdit()
-        self.edit_pdf_path.setPlaceholderText("Selecione o arquivo PDF do memorial...")
-        btn_procurar_pdf = QPushButton("Procurar...")
-        btn_procurar_pdf.setObjectName("botaoSecundario")
-        btn_procurar_pdf.setIcon(self._icone(QStyle.StandardPixmap.SP_DialogOpenButton))
-        btn_procurar_pdf.clicked.connect(self._selecionar_pdf)
         linha_pdf = QHBoxLayout()
-        linha_pdf.addWidget(self.edit_pdf_path)
-        linha_pdf.addWidget(btn_procurar_pdf)
-        form_pdf.addRow("Caminho do PDF:", linha_pdf)
-        grp_pdf.setLayout(form_pdf)
-        layout.addWidget(grp_pdf)
+        self.edit_pdf_path = QLineEdit()
+        self.edit_pdf_path.setPlaceholderText("Selecione um arquivo PDF")
+        linha_pdf.addWidget(self.edit_pdf_path, 1)
+        btn_pdf = QPushButton("Escolher PDF")
+        btn_pdf.setObjectName("botaoSecundario")
+        btn_pdf.setIcon(self._icone(QStyle.StandardPixmap.SP_DialogOpenButton))
+        btn_pdf.clicked.connect(self._selecionar_pdf)
+        linha_pdf.addWidget(btn_pdf)
+        layout.addLayout(linha_pdf)
 
-        nota_privacidade = QLabel(
-            "🔒 Seu PDF e as coordenadas extraídas ficam só no seu computador — "
-            "nada disso é enviado para a internet em nenhuma etapa."
-        )
-        nota_privacidade.setWordWrap(True)
-        nota_privacidade.setStyleSheet("color: #1f6b47; font-size: 11px; font-weight: 600; padding: 2px 2px 4px 2px;")
-        layout.addWidget(nota_privacidade)
+        nota = QLabel("O PDF é processado no seu computador. Coordenadas repetidas são preservadas.")
+        nota.setWordWrap(True)
+        nota.setObjectName("textoAjuda")
+        layout.addWidget(nota)
 
-        # --- Modo de deteccao: automatico (padrao) ou manual ---
-        grp_modo = QGroupBox("Como identificar as coordenadas no PDF")
-        layout_modo = QVBoxLayout()
-        layout_modo.setSpacing(3)
-
-        self.radio_automatico = QRadioButton("Detecção automática (recomendado)")
-        self.radio_manual = QRadioButton("Configurar manualmente")
+        self.btn_opcoes = QToolButton()
+        self.btn_opcoes.setText("Opções de extração")
+        self.btn_opcoes.setCheckable(True)
+        self.btn_opcoes.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.btn_opcoes.setArrowType(Qt.ArrowType.RightArrow)
+        layout.addWidget(self.btn_opcoes, 0, Qt.AlignmentFlag.AlignLeft)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        opcoes = QWidget()
+        detalhes = QVBoxLayout(opcoes)
+        detalhes.setContentsMargins(0, 0, 0, 0)
+        self.radio_automatico = QRadioButton("Identificar coordenadas automaticamente")
+        self.radio_manual = QRadioButton("Informar rótulos e ordem manualmente")
         self.radio_automatico.setChecked(True)
         self.grupo_modo = QButtonGroup(self)
         self.grupo_modo.addButton(self.radio_automatico)
         self.grupo_modo.addButton(self.radio_manual)
+        detalhes.addWidget(self.radio_automatico)
+        detalhes.addWidget(self.radio_manual)
 
-        explicacao_auto = QLabel(
-            "Testa sozinho os rótulos mais comuns e a grandeza típica de UTM no Brasil "
-            "pra identificar Norte/Leste, mesmo com ordem invertida."
-        )
-        explicacao_auto.setObjectName("explicacaoModo")
-        explicacao_auto.setWordWrap(True)
-
-        layout_modo.addWidget(self.radio_automatico)
-        layout_modo.addWidget(explicacao_auto)
-        layout_modo.addWidget(self.radio_manual)
-        grp_modo.setLayout(layout_modo)
-        layout.addWidget(grp_modo)
-
-        self.radio_automatico.toggled.connect(self._atualizar_modo_deteccao)
-
-        # --- Configuracao do padrao de coordenadas (so aparece no modo manual) ---
-        self.grp_padrao = QGroupBox("Padrão de representação das coordenadas")
-        form_padrao = QFormLayout()
-        form_padrao.setSpacing(6)
-
+        self.grp_padrao = QGroupBox("Rótulos no PDF")
+        form_padrao = QFormLayout(self.grp_padrao)
         self.edit_rotulo_norte = QLineEdit("N")
-        self.edit_rotulo_norte.setPlaceholderText("Ex.: N, Y, Y=")
-        form_padrao.addRow("Rótulo do Norte/Y:", self.edit_rotulo_norte)
-
         self.edit_rotulo_leste = QLineEdit("E")
-        self.edit_rotulo_leste.setPlaceholderText("Ex.: E, X, X=")
-        form_padrao.addRow("Rótulo do Leste/X:", self.edit_rotulo_leste)
-
         self.combo_ordem = QComboBox()
-        self.combo_ordem.addItem("Norte/Y aparece primeiro (N ... E)", "N_FIRST")
-        self.combo_ordem.addItem("Leste/X aparece primeiro (E ... N)", "E_FIRST")
-        form_padrao.addRow("Ordem no texto:", self.combo_ordem)
-
-        self.spin_casas_decimais = QSpinBox()
-        self.spin_casas_decimais.setRange(0, 8)
-        self.spin_casas_decimais.setValue(2)
-        self.check_manter_casas_originais = QCheckBox(
-            "Manter as casas decimais originais do PDF (não arredondar)"
-        )
-        self.check_manter_casas_originais.stateChanged.connect(
-            lambda _: self.spin_casas_decimais.setDisabled(
-                self.check_manter_casas_originais.isChecked()
-            )
-        )
-        linha_casas = QHBoxLayout()
-        linha_casas.addWidget(self.spin_casas_decimais)
-        linha_casas.addWidget(self.check_manter_casas_originais)
-        form_padrao.addRow("Casas decimais desejadas:", linha_casas)
-
-        self.label_preview_regex = QLabel("Padrão (regex) gerado: -")
+        self.combo_ordem.addItem("Norte antes de Leste", "N_FIRST")
+        self.combo_ordem.addItem("Leste antes de Norte", "E_FIRST")
+        form_padrao.addRow("Norte / Y:", self.edit_rotulo_norte)
+        form_padrao.addRow("Leste / X:", self.edit_rotulo_leste)
+        form_padrao.addRow("Ordem:", self.combo_ordem)
+        self.label_preview_regex = QLabel()
         self.label_preview_regex.setObjectName("previewRegex")
         self.label_preview_regex.setWordWrap(True)
         form_padrao.addRow(self.label_preview_regex)
+        detalhes.addWidget(self.grp_padrao)
 
-        self.grp_padrao.setLayout(form_padrao)
-        layout.addWidget(self.grp_padrao)
+        grupo_saida = QGroupBox("Nomes e precisão")
+        form_saida = QFormLayout(grupo_saida)
+        self.edit_prefixo_vertice = QLineEdit("P")
+        self.spin_inicio_vertice = QSpinBox()
+        self.spin_inicio_vertice.setRange(0, 999999)
+        self.spin_casas_decimais = QSpinBox()
+        self.spin_casas_decimais.setRange(0, 8)
+        self.spin_casas_decimais.setValue(2)
+        self.check_manter_casas_originais = QCheckBox("Não arredondar coordenadas")
+        self.check_manter_casas_originais.setChecked(True)
+        self.spin_casas_decimais.setEnabled(False)
+        self.check_manter_casas_originais.toggled.connect(self.spin_casas_decimais.setDisabled)
+        form_saida.addRow("Prefixo dos vértices:", self.edit_prefixo_vertice)
+        form_saida.addRow("Número inicial:", self.spin_inicio_vertice)
+        form_saida.addRow(self.check_manter_casas_originais)
+        form_saida.addRow("Casas decimais ao arredondar:", self.spin_casas_decimais)
+        detalhes.addWidget(grupo_saida)
+        detalhes.addStretch()
+        scroll.setWidget(opcoes)
+        scroll.hide()
+        self.btn_opcoes.toggled.connect(scroll.setVisible)
+        self.btn_opcoes.toggled.connect(lambda aberto: self.btn_opcoes.setArrowType(
+            Qt.ArrowType.DownArrow if aberto else Qt.ArrowType.RightArrow))
+        layout.addWidget(scroll, 1)
+        layout.addStretch()
 
+        btn_extrair = QPushButton("Ler PDF e mostrar prévia  →")
+        btn_extrair.clicked.connect(self._extrair_vertices)
+        layout.addWidget(btn_extrair)
+        self.tabs.addTab(aba, "1  Arquivo")
+        self.radio_automatico.toggled.connect(self._atualizar_modo_deteccao)
         for widget in (self.edit_rotulo_norte, self.edit_rotulo_leste):
             widget.textChanged.connect(self._atualizar_preview_regex)
         self.combo_ordem.currentIndexChanged.connect(self._atualizar_preview_regex)
         self._atualizar_preview_regex()
-
-        # --- Nomenclatura dos vertices ---
-        grp_vertices = QGroupBox("Nomenclatura dos vértices")
-        layout_vertices = QVBoxLayout()
-        layout_vertices.setSpacing(4)
-
-        form_vertices = QFormLayout()
-        form_vertices.setSpacing(6)
-        self.edit_prefixo_vertice = QLineEdit("P")
-        self.edit_prefixo_vertice.setPlaceholderText("Ex.: P, V, VERT-")
-        form_vertices.addRow("Prefixo (ex.: P -> P0, P1...):", self.edit_prefixo_vertice)
-
-        self.spin_inicio_vertice = QSpinBox()
-        self.spin_inicio_vertice.setRange(0, 999)
-        self.spin_inicio_vertice.setValue(0)
-        form_vertices.addRow("Número inicial:", self.spin_inicio_vertice)
-        layout_vertices.addLayout(form_vertices)
-
-        ajuda_vertices = QLabel(
-            "Esse nome (P0, P1...) é o que vai ser gravado na coluna da camada, "
-            "conforme explicado acima."
-        )
-        ajuda_vertices.setObjectName("textoAjuda")
-        ajuda_vertices.setWordWrap(True)
-        layout_vertices.addWidget(ajuda_vertices)
-
-        grp_vertices.setLayout(layout_vertices)
-        layout.addWidget(grp_vertices)
-
-        layout.addStretch()
-
-        btn_extrair = QPushButton("  1. Extrair vértices do PDF")
-        btn_extrair.setIcon(self._icone(QStyle.StandardPixmap.SP_FileDialogContentsView))
-        btn_extrair.clicked.connect(self._extrair_vertices)
-        layout.addWidget(btn_extrair)
-
-        self.tabs.addTab(aba, "Configurar")
         self._atualizar_modo_deteccao()
 
     def _montar_aba_resultado(self):
@@ -506,13 +456,13 @@ class MemorialDialog(QDialog):
         layout.setSpacing(7)
         layout.setContentsMargins(10, 10, 10, 10)
 
-        instrucao = QLabel(
-            "Depois de clicar em \"1. Extrair vértices do PDF\", na aba Configurar, "
-            "o resultado aparece aqui."
-        )
-        instrucao.setObjectName("textoAjuda")
-        instrucao.setWordWrap(True)
-        layout.addWidget(instrucao)
+        titulo = QLabel("2  ·  Confira e importe")
+        titulo.setObjectName("tituloEtapa")
+        layout.addWidget(titulo)
+        self.label_contagem = QLabel("Leia um PDF para ver os vértices aqui.")
+        self.label_contagem.setObjectName("textoAjuda")
+        self.label_contagem.setWordWrap(True)
+        layout.addWidget(self.label_contagem)
 
         self.label_resultado_deteccao = QLabel("")
         self.label_resultado_deteccao.setWordWrap(True)
@@ -527,45 +477,51 @@ class MemorialDialog(QDialog):
         self.tabela_previa.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         layout.addWidget(self.tabela_previa, 1)
 
-        ajuda_inserir = QLabel(
-            "Confira os números acima antes de inserir — depois de gravado na camada, "
-            "a correção precisa ser feita manualmente no QGIS."
-        )
-        ajuda_inserir.setObjectName("textoAjuda")
-        ajuda_inserir.setWordWrap(True)
-        layout.addWidget(ajuda_inserir)
-
-        linha_botoes = QHBoxLayout()
-        linha_botoes.setSpacing(6)
-        btn_inserir = QPushButton("  2. Inserir vértices na camada")
-        btn_inserir.setIcon(self._icone(QStyle.StandardPixmap.SP_DialogApplyButton))
-        btn_inserir.clicked.connect(self._inserir_vertices)
-        linha_botoes.addWidget(btn_inserir)
-        layout.addLayout(linha_botoes)
-
-        btn_calcular_coords = QPushButton("  3. Gerar colunas de coordenadas reais ($x / $y)")
-        btn_calcular_coords.setIcon(self._icone(QStyle.StandardPixmap.SP_FileDialogDetailedView))
+        destino = QGroupBox("Camada de destino")
+        layout_destino = QVBoxLayout(destino)
+        linha_camada = QHBoxLayout()
+        self.combo_camadas = QComboBox()
+        self._popular_camadas_pontos()
+        linha_camada.addWidget(self.combo_camadas, 1)
+        atualizar = QPushButton("Atualizar")
+        atualizar.setObjectName("botaoSecundario")
+        atualizar.clicked.connect(self._popular_camadas_pontos)
+        linha_camada.addWidget(atualizar)
+        layout_destino.addLayout(linha_camada)
+        ajuda = QLabel("Escolha uma camada de pontos com o mesmo sistema de coordenadas do PDF. "
+                       "Os nomes são gravados no primeiro campo de texto disponível.")
+        ajuda.setObjectName("textoAjuda")
+        ajuda.setWordWrap(True)
+        layout_destino.addWidget(ajuda)
+        layout.addWidget(destino)
+        self.btn_inserir = QPushButton("Inserir vértices na camada")
+        self.btn_inserir.setEnabled(False)
+        self.btn_inserir.clicked.connect(self._inserir_vertices)
+        layout.addWidget(self.btn_inserir)
+        dica = QLabel("Confira a prévia e depois salve as edições da camada no QGIS.")
+        dica.setObjectName("textoAjuda")
+        dica.setWordWrap(True)
+        layout.addWidget(dica)
+        btn_calcular_coords = QPushButton("Opcional: preencher campos coord_x e coord_y")
+        btn_calcular_coords.setObjectName("botaoSecundario")
+        btn_calcular_coords.setToolTip("Cria ou atualiza os campos para todos os pontos da camada.")
         btn_calcular_coords.clicked.connect(self._gerar_colunas_coordenadas)
         layout.addWidget(btn_calcular_coords)
-
-        ajuda_colunas = QLabel(
-            "Opcional: cria (ou atualiza) duas colunas coord_x e coord_y na camada, "
-            "preenchidas com a coordenada real de cada ponto — útil pra exibir o "
-            "valor na tabela de atributos sem precisar abrir a calculadora de campo."
-        )
-        ajuda_colunas.setObjectName("textoAjuda")
-        ajuda_colunas.setWordWrap(True)
-        layout.addWidget(ajuda_colunas)
-
-        layout.addWidget(QLabel("Registro de eventos (detalhe técnico):"))
         self.log_importacao = QPlainTextEdit()
         self.log_importacao.setReadOnly(True)
-        self.log_importacao.setMaximumHeight(65)
+        self.log_importacao.setMaximumHeight(90)
+        self.log_importacao.hide()
+        btn_log = QToolButton()
+        btn_log.setText("Mostrar registro de eventos")
+        btn_log.setCheckable(True)
+        btn_log.toggled.connect(self.log_importacao.setVisible)
+        layout.addWidget(btn_log)
         layout.addWidget(self.log_importacao)
 
-        self.tabs.addTab(aba, "Resultado")
+        self.tabs.addTab(aba, "2  Prévia e importação")
 
     def _popular_camadas_pontos(self):
+        selecionada = self.combo_camadas.currentData()
         self.combo_camadas.clear()
         for layer in QgsProject.instance().mapLayers().values():
             try:
@@ -573,6 +529,9 @@ class MemorialDialog(QDialog):
                     self.combo_camadas.addItem(layer.name(), layer.id())
             except Exception:  # nosec B112 - so pula camadas que nao respondem geometryType()
                 continue
+        indice = self.combo_camadas.findData(selecionada) if selecionada else -1
+        if indice >= 0:
+            self.combo_camadas.setCurrentIndex(indice)
 
     def _selecionar_pdf(self):
         caminho, _ = QFileDialog.getOpenFileName(
@@ -606,12 +565,17 @@ class MemorialDialog(QDialog):
             self.tabela_previa.setItem(linha, 1, QTableWidgetItem(str(easting)))
             self.tabela_previa.setItem(linha, 2, QTableWidgetItem(str(northing)))
 
-    def _extrair_vertices(self):
-        # Não permita inserir resultados de uma extração anterior após uma falha.
+    def _invalidar_previa(self, *_):
+        # Alterar o arquivo ou as opções exige uma nova extração.
         self._pontos_extraidos = []
         self._dados_extraidos = []
         self._preencher_tabela_previa([])
         self.label_resultado_deteccao.clear()
+        self.label_contagem.setText("Leia um PDF para ver os vértices aqui.")
+        self.btn_inserir.setEnabled(False)
+
+    def _extrair_vertices(self):
+        self._invalidar_previa()
         pdf_path = self.edit_pdf_path.text().strip()
         if not pdf_path or not os.path.isfile(pdf_path):
             QMessageBox.warning(self, "Aviso", "Selecione um arquivo PDF valido.")
@@ -685,6 +649,8 @@ class MemorialDialog(QDialog):
         self._pontos_extraidos = pontos
         self._dados_extraidos = dados
         self._preencher_tabela_previa(dados)
+        self.label_contagem.setText(f"{len(dados)} vértice(s) encontrados. Confira a sequência e as coordenadas.")
+        self.btn_inserir.setEnabled(bool(dados))
         self.tabs.setCurrentIndex(1)  # aba "Resultado"
 
         self._log(f"{len(dados)} vértices encontrados:")
@@ -744,7 +710,7 @@ class MemorialDialog(QDialog):
 
         self._log(f"-> {len(novas_feicoes)} pontos inseridos na camada '{camada.name()}'.")
         QMessageBox.information(
-            self, "Concluido", f"{len(novas_feicoes)} vertices inseridos com sucesso."
+            self, "Concluido", f"{len(novas_feicoes)} vértices inseridos. Salve as edições da camada no QGIS."
         )
 
     def _gerar_colunas_coordenadas(self):
